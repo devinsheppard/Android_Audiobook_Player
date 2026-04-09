@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ClearListen</string>
+    <string name="library_title">Audiobooks</string>
+    <string name="library_subtitle">Audiobooks, Made Simple.</string>
+    <string name="import_books">Import audiobooks</string>
+    <string name="empty_library_title">No audiobooks yet</string>
+    <string name="empty_library_body">Import MP3, M4B, AAC, or WAV files to build your library.</string>
+    <string name="now_playing">Now playing</string>
+    <string name="resume_label">Resume</string>
+    <string name="play_label">Play</string>
+    <string name="pause_label">Pause</string>
+    <string name="skip_back">Back 15 seconds</string>
+    <string name="skip_forward">Forward 30 seconds</string>
+    <string name="back_to_library">Back to library</string>
+    <string name="playback_speed">Playback speed</string>
+    <string name="sleep_timer">Sleep timer</string>
+    <string name="bookmark_here">Add bookmark</string>
+    <string name="bookmarks">Bookmarks</string>
+    <string name="chapters">Chapters</string>
+    <string name="no_chapters">No chapter metadata found for this audiobook.</string>
+    <string name="no_bookmarks">No bookmarks saved yet.</string>
+    <string name="position">Position</string>
+    <string name="duration">Duration</string>
+    <string name="author_unknown">Unknown author</string>
+    <string name="cover_art">Cover art</string>
+    <string name="cover_art_placeholder">No cover art available</string>
+    <string name="speed_dialog_title">Choose playback speed</string>
+    <string name="sleep_dialog_title">Choose sleep timer</string>
+    <string name="sleep_timer_off">Sleep timer off</string>
+    <string name="cancel">Cancel</string>
+    <string name="active_sleep_timer">Sleep timer: %1$s remaining</string>
+    <string name="bookmark_added">Bookmark saved</string>
+    <string name="import_complete">Imported %1$d audiobooks</string>
+    <string name="import_failed">Unable to import those files.</string>
+    <string name="open_player">Open player</string>
+    <string name="listening_progress">Listening progress</string>
+    <string name="playback_controls">Playback controls</string>
+    <string name="player_title">Player</string>
+    <string name="seek_to">Seek to %1$s</string>
+    <string name="chapter_number">Chapter %1$d</string>
+</resources>
