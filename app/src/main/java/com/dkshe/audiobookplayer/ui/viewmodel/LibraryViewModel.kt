@@ -10,8 +10,10 @@ import com.dkshe.audiobookplayer.app.AppContainer
 import com.dkshe.audiobookplayer.data.model.LibraryItem
 import com.dkshe.audiobookplayer.data.repository.AudiobookRepository
 import com.dkshe.audiobookplayer.importing.AudiobookImporter
+import com.dkshe.audiobookplayer.importing.ImportResult
 import com.dkshe.audiobookplayer.media.PlaybackConnection
 import com.dkshe.audiobookplayer.media.PlayerUiState
+import com.dkshe.audiobookplayer.ui.UiMessages
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -58,14 +60,14 @@ class LibraryViewModel(
             isImporting.value = true
             runCatching {
                 importer.import(uris, persistableFlags)
-            }.onSuccess { count ->
-                message.value = if (count > 0) {
-                    "Imported $count audiobooks"
-                } else {
-                    "No supported audiobook files were selected."
-                }
+            }.onSuccess { result ->
+                message.value = formatImportMessage(
+                    result = result,
+                    successMessage = UiMessages::importedAudiobooks,
+                    emptyMessage = UiMessages.noSupportedFilesSelected,
+                )
             }.onFailure {
-                message.value = "Unable to import those files."
+                message.value = UiMessages.importFailed
             }
             isImporting.value = false
         }
@@ -76,14 +78,14 @@ class LibraryViewModel(
             isImporting.value = true
             runCatching {
                 importer.importFolder(folderUri, persistableFlags)
-            }.onSuccess { count ->
-                message.value = if (count > 0) {
-                    "Imported 1 audiobook folder"
-                } else {
-                    "No supported audiobook files were found in that folder."
-                }
+            }.onSuccess { result ->
+                message.value = formatImportMessage(
+                    result = result,
+                    successMessage = { UiMessages.importedFolder() },
+                    emptyMessage = UiMessages.noSupportedFilesInFolder,
+                )
             }.onFailure {
-                message.value = "Unable to import that folder."
+                message.value = UiMessages.importFolderFailed
             }
             isImporting.value = false
         }
@@ -91,6 +93,23 @@ class LibraryViewModel(
 
     fun clearMessage() {
         message.value = null
+    }
+
+    private fun formatImportMessage(
+        result: ImportResult,
+        successMessage: (Int) -> String,
+        emptyMessage: String,
+    ): String {
+        return when {
+            result.importedCount > 0 && result.unsupportedAaxFound ->
+                "${successMessage(result.importedCount)}. ${UiMessages.aaxSkippedWithImport}"
+            result.importedCount > 0 ->
+                successMessage(result.importedCount)
+            result.unsupportedAaxFound ->
+                UiMessages.aaxNotSupported
+            else ->
+                emptyMessage
+        }
     }
 
     companion object {

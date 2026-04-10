@@ -21,11 +21,11 @@ import androidx.compose.material.icons.rounded.ClearAll
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.Hotel
 import androidx.compose.material.icons.rounded.KeyboardArrowLeft
-import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.PauseCircle
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Replay30
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -51,10 +51,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.dkshe.audiobookplayer.R
 import com.dkshe.audiobookplayer.data.entity.BookmarkEntity
 import com.dkshe.audiobookplayer.data.entity.ChapterEntity
 import com.dkshe.audiobookplayer.ui.components.AudiobookCoverArt
@@ -100,7 +102,7 @@ fun PlayerScreen(
 
     if (showSpeedDialog) {
         SelectionDialog(
-            title = "Choose playback speed",
+            title = stringResource(R.string.speed_dialog_title),
             options = listOf(
                 "0.75x" to 0.75f,
                 "1.0x" to 1.0f,
@@ -119,7 +121,7 @@ fun PlayerScreen(
 
     if (showSleepDialog) {
         SelectionDialog(
-            title = "Choose sleep timer",
+            title = stringResource(R.string.sleep_dialog_title),
             options = listOf(
                 "10 minutes" to 10f,
                 "15 minutes" to 15f,
@@ -143,11 +145,9 @@ fun PlayerScreen(
     if (showClearPlaylistDialog) {
         AlertDialog(
             onDismissRequest = { showClearPlaylistDialog = false },
-            title = { Text(text = "Clear current playlist?") },
+            title = { Text(text = stringResource(R.string.clear_playlist_title)) },
             text = {
-                Text(
-                    text = "This stops playback and removes the active playlist. Your listening position will be saved.",
-                )
+                Text(text = stringResource(R.string.clear_playlist_message))
             },
             confirmButton = {
                 TextButton(
@@ -156,12 +156,12 @@ fun PlayerScreen(
                         showClearPlaylistDialog = false
                     },
                 ) {
-                    Text(text = "Clear playlist")
+                    Text(text = stringResource(R.string.clear_playlist_action))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showClearPlaylistDialog = false }) {
-                    Text(text = "Cancel")
+                    Text(text = stringResource(R.string.cancel))
                 }
             },
         )
@@ -170,12 +170,12 @@ fun PlayerScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "Player") },
+                title = { Text(text = stringResource(R.string.player_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.Rounded.KeyboardArrowLeft,
-                            contentDescription = "Back to library",
+                            contentDescription = stringResource(R.string.back_to_library),
                         )
                     }
                 },
@@ -188,7 +188,7 @@ fun PlayerScreen(
         if (audiobook == null) {
             Box(modifier = Modifier.fillMaxSize()) {
                 Text(
-                    text = "This audiobook is not available.",
+                    text = stringResource(R.string.playback_unavailable),
                     modifier = Modifier.align(Alignment.Center),
                 )
             }
@@ -233,7 +233,7 @@ fun PlayerScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = audiobook.author ?: "Unknown author",
+                            text = audiobook.author ?: stringResource(R.string.author_unknown),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 2,
@@ -252,7 +252,7 @@ fun PlayerScreen(
                 ) {
                     Column(modifier = Modifier.padding(20.dp)) {
                         Text(
-                            text = "Position",
+                            text = stringResource(R.string.position),
                             style = MaterialTheme.typography.titleMedium,
                         )
                         Spacer(modifier = Modifier.height(12.dp))
@@ -290,7 +290,7 @@ fun PlayerScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = "Playback controls",
+                        text = stringResource(R.string.playback_controls),
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Spacer(modifier = Modifier.height(16.dp))
@@ -300,22 +300,22 @@ fun PlayerScreen(
                         verticalAlignment = Alignment.Top,
                     ) {
                         ControlButton(
-                            label = "15 back",
+                            label = stringResource(R.string.skip_back),
                             onClick = onSkipBack,
                             icon = {
                                 Icon(
                                     imageVector = Icons.Rounded.Replay30,
-                                    contentDescription = "Back 15 seconds",
+                                    contentDescription = stringResource(R.string.skip_back),
                                 )
                             },
                         )
                         ControlButton(
-                            label = "30 forward",
+                            label = stringResource(R.string.skip_forward),
                             onClick = onSkipForward,
                             icon = {
                                 Icon(
                                     imageVector = Icons.Rounded.FastForward,
-                                    contentDescription = "Forward 30 seconds",
+                                    contentDescription = stringResource(R.string.skip_forward),
                                 )
                             },
                         )
@@ -332,16 +332,20 @@ fun PlayerScreen(
                                 Icons.Rounded.PlayCircle
                             },
                             contentDescription = if (uiState.playback.isPlaying && uiState.isCurrentBook) {
-                                "Pause"
+                                stringResource(R.string.pause_label)
                             } else {
-                                "Play"
+                                stringResource(R.string.play_label)
                             },
                             modifier = Modifier.size(56.dp),
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = if (uiState.playback.isPlaying && uiState.isCurrentBook) "Pause" else "Play",
+                        text = if (uiState.playback.isPlaying && uiState.isCurrentBook) {
+                            stringResource(R.string.pause_label)
+                        } else {
+                            stringResource(R.string.play_label)
+                        },
                         style = MaterialTheme.typography.labelLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -353,24 +357,24 @@ fun PlayerScreen(
                         verticalAlignment = Alignment.Top,
                     ) {
                         ControlButton(
-                            label = "Prev chapter",
+                            label = stringResource(R.string.previous_chapter_compact),
                             onClick = onPreviousChapter,
                             enabled = uiState.hasPreviousChapter,
                             icon = {
                                 Icon(
                                     imageVector = Icons.Rounded.SkipPrevious,
-                                    contentDescription = "Previous chapter",
+                                    contentDescription = stringResource(R.string.previous_chapter),
                                 )
                             },
                         )
                         ControlButton(
-                            label = "Next chapter",
+                            label = stringResource(R.string.next_chapter_compact),
                             onClick = onNextChapter,
                             enabled = uiState.hasNextChapter,
                             icon = {
                                 Icon(
                                     imageVector = Icons.Rounded.SkipNext,
-                                    contentDescription = "Next chapter",
+                                    contentDescription = stringResource(R.string.next_chapter),
                                 )
                             },
                         )
@@ -394,7 +398,10 @@ fun PlayerScreen(
                         Icon(imageVector = Icons.Rounded.Speed, contentDescription = null)
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Playback speed ${uiState.playback.playbackSpeed}x",
+                            text = stringResource(
+                                R.string.playback_speed_value,
+                                uiState.playback.playbackSpeed.toString(),
+                            ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -409,9 +416,12 @@ fun PlayerScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = if (uiState.sleepTimer.isActive) {
-                                "Sleep timer ${formatRemainingMinutes(uiState.sleepTimer.remainingMs)} left"
+                                stringResource(
+                                    R.string.sleep_timer_remaining,
+                                    formatRemainingMinutes(uiState.sleepTimer.remainingMs),
+                                )
                             } else {
-                                "Set sleep timer"
+                                stringResource(R.string.set_sleep_timer)
                             },
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -426,7 +436,7 @@ fun PlayerScreen(
                         Icon(imageVector = Icons.Rounded.BookmarkAdd, contentDescription = null)
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Add bookmark",
+                            text = stringResource(R.string.bookmark_here),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -443,7 +453,7 @@ fun PlayerScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Clear current playlist",
+                            text = stringResource(R.string.clear_current_playlist),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -452,10 +462,10 @@ fun PlayerScreen(
             }
 
             item {
-                SectionCard(title = "Chapters") {
+                SectionCard(title = stringResource(R.string.chapters)) {
                     if (uiState.chapters.isEmpty()) {
                         Text(
-                            text = "No chapter metadata found for this audiobook.",
+                            text = stringResource(R.string.no_chapters),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -487,10 +497,10 @@ fun PlayerScreen(
             }
 
             item {
-                SectionCard(title = "Bookmarks") {
+                SectionCard(title = stringResource(R.string.bookmarks)) {
                     if (uiState.bookmarks.isEmpty()) {
                         Text(
-                            text = "No bookmarks saved yet.",
+                            text = stringResource(R.string.no_bookmarks),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -592,7 +602,7 @@ private fun BookmarkRow(
                 )
             }
             Text(
-                text = "Play",
+                text = stringResource(R.string.bookmark_play),
                 style = MaterialTheme.typography.labelLarge,
             )
         }
@@ -631,7 +641,7 @@ private fun SelectionDialog(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
-                            text = "Turn off timer",
+                            text = stringResource(R.string.turn_off_timer),
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -642,7 +652,7 @@ private fun SelectionDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(text = "Cancel")
+                Text(text = stringResource(R.string.cancel))
             }
         },
     )

@@ -15,11 +15,13 @@ import com.dkshe.audiobookplayer.data.repository.AudiobookRepository
 import com.dkshe.audiobookplayer.media.PlaybackConnection
 import com.dkshe.audiobookplayer.media.PlayerUiState
 import com.dkshe.audiobookplayer.media.SleepTimerState
+import com.dkshe.audiobookplayer.ui.UiMessages
 import com.dkshe.audiobookplayer.util.formatBookmarkLabel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -124,7 +126,9 @@ class PlayerViewModel(
     ) { playerData, playback, sleepTimer, currentMessage ->
         PlayerScreenUiState(
             audiobook = playerData.audiobook,
-            contentItems = playerData.contentItems,
+            contentItems = playerData.contentItems.ifEmpty {
+                fallbackContentItems(playerData.audiobook)
+            },
             persistedPlayback = playerData.persistedPlayback,
             bookmarks = playerData.bookmarks,
             chapters = playerData.chapters,
@@ -140,10 +144,12 @@ class PlayerViewModel(
 
     fun preparePlayback() {
         if (hasPreparedPlayback) return
-        hasPreparedPlayback = true
         viewModelScope.launch {
+            awaitPlaybackConnection()
             val audiobook = repository.getAudiobook(audiobookId) ?: return@launch
-            val contentItems = repository.getContentItems(audiobookId)
+            val contentItems = repository.getContentItems(audiobookId).ifEmpty {
+                fallbackContentItems(audiobook)
+            }
             val resumePosition = repository.getPlaybackState(audiobookId)?.positionMs ?: 0L
             playbackConnection.openBook(
                 audiobook = audiobook,
@@ -151,6 +157,7 @@ class PlayerViewModel(
                 startPositionMs = resumePosition,
                 autoPlay = true,
             )
+            hasPreparedPlayback = true
         }
     }
 
@@ -206,7 +213,7 @@ class PlayerViewModel(
                 )
             }
             playbackConnection.clearPlaylist()
-            message.value = "Current playlist cleared"
+            message.value = UiMessages.currentPlaylistCleared
         }
     }
 
@@ -218,7 +225,7 @@ class PlayerViewModel(
                 positionMs = position,
                 label = formatBookmarkLabel(position),
             )
-            message.value = "Bookmark saved"
+            message.value = UiMessages.bookmarkSaved
         }
     }
 
@@ -257,7 +264,7 @@ class PlayerViewModel(
             return
         }
 
-        message.value = "No chapters or tracks available"
+        message.value = UiMessages.noChaptersOrTracks
     }
 
     fun nextChapter() {
@@ -266,7 +273,7 @@ class PlayerViewModel(
         if (chapters.isNotEmpty()) {
             val nextChapter = chapters.getOrNull(currentState.currentChapterIndex + 1)
             if (nextChapter == null) {
-                message.value = "You are at the last chapter"
+                message.value = UiMessages.lastChapter
                 return
             }
             prepareFromPosition(nextChapter.startMs, autoPlay = true)
@@ -277,14 +284,14 @@ class PlayerViewModel(
         if (contentItems.size > 1) {
             val nextIndex = currentState.currentContentItemIndex + 1
             if (nextIndex > contentItems.lastIndex) {
-                message.value = "You are at the last track"
+                message.value = UiMessages.lastTrack
                 return
             }
             prepareFromPosition(startOffsetForContentItem(contentItems, nextIndex), autoPlay = true)
             return
         }
 
-        message.value = "No chapters or tracks available"
+        message.value = UiMessages.noChaptersOrTracks
     }
 
     fun clearMessage() {
@@ -303,8 +310,11 @@ class PlayerViewModel(
 
     private fun prepareFromPosition(positionMs: Long, autoPlay: Boolean) {
         viewModelScope.launch {
+            awaitPlaybackConnection()
             val audiobook = repository.getAudiobook(audiobookId) ?: return@launch
-            val contentItems = repository.getContentItems(audiobookId)
+            val contentItems = repository.getContentItems(audiobookId).ifEmpty {
+                fallbackContentItems(audiobook)
+            }
             playbackConnection.openBook(
                 audiobook = audiobook,
                 contentItems = contentItems,
@@ -312,6 +322,24 @@ class PlayerViewModel(
                 autoPlay = autoPlay,
             )
         }
+    }
+
+    private suspend fun awaitPlaybackConnection() {
+        if (playbackConnection.state.value.isConnected) return
+        playbackConnection.state.first { it.isConnected }
+    }
+
+    private fun fallbackContentItems(audiobook: AudiobookEntity): List<AudiobookContentItemEntity> {
+        return listOf(
+            AudiobookContentItemEntity(
+                audiobookId = audiobook.id,
+                playOrder = 0,
+                contentUri = audiobook.contentUri,
+                fileName = audiobook.fileName,
+                durationMs = audiobook.totalDurationMs,
+                mimeType = audiobook.mimeType,
+            ),
+        )
     }
 
     companion object {

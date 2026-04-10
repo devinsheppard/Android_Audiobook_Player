@@ -9,15 +9,25 @@ import com.dkshe.audiobookplayer.data.repository.AudiobookRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+data class ImportResult(
+    val importedCount: Int = 0,
+    val unsupportedAaxFound: Boolean = false,
+)
+
 class AudiobookImporter(
     private val context: Context,
     private val repository: AudiobookRepository,
     private val metadataExtractor: AudiobookMetadataExtractor,
     private val coverArtStore: CoverArtStore,
 ) {
-    suspend fun import(uris: List<Uri>, persistableFlags: Int): Int = withContext(Dispatchers.IO) {
+    suspend fun import(uris: List<Uri>, persistableFlags: Int): ImportResult = withContext(Dispatchers.IO) {
         var importedCount = 0
+        var unsupportedAaxFound = false
         uris.forEach { uri ->
+            if (isAax(uri)) {
+                unsupportedAaxFound = true
+                return@forEach
+            }
             if (!isSupported(uri)) return@forEach
 
             runCatching {
@@ -53,10 +63,13 @@ class AudiobookImporter(
                 importedCount += 1
             }
         }
-        importedCount
+        ImportResult(
+            importedCount = importedCount,
+            unsupportedAaxFound = unsupportedAaxFound,
+        )
     }
 
-    suspend fun importFolder(folderUri: Uri, persistableFlags: Int): Int = withContext(Dispatchers.IO) {
+    suspend fun importFolder(folderUri: Uri, persistableFlags: Int): ImportResult = withContext(Dispatchers.IO) {
         val flags = persistableFlags and
             (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         if (flags != 0) {
@@ -65,15 +78,19 @@ class AudiobookImporter(
             }
         }
 
-        val rootFolder = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext 0
-        if (!rootFolder.isDirectory) return@withContext 0
+        val rootFolder = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext ImportResult()
+        if (!rootFolder.isDirectory) return@withContext ImportResult()
+
+        val unsupportedAaxFound = containsAax(rootFolder)
 
         val audioFiles = collectAudioFiles(rootFolder)
             .sortedWith { left, right ->
                 compareNaturalNames(left.name.orEmpty(), right.name.orEmpty())
             }
 
-        if (audioFiles.isEmpty()) return@withContext 0
+        if (audioFiles.isEmpty()) {
+            return@withContext ImportResult(unsupportedAaxFound = unsupportedAaxFound)
+        }
 
         val fileMetadata = audioFiles.mapNotNull { file ->
             val uri = file.uri
@@ -82,7 +99,9 @@ class AudiobookImporter(
                 ?.let { metadata -> file to metadata }
         }
 
-        if (fileMetadata.isEmpty()) return@withContext 0
+        if (fileMetadata.isEmpty()) {
+            return@withContext ImportResult(unsupportedAaxFound = unsupportedAaxFound)
+        }
 
         val folderName = rootFolder.name ?: "Audiobook"
         val title = folderName
@@ -120,7 +139,10 @@ class AudiobookImporter(
             }
         }
         repository.replaceChapters(audiobookId, emptyList())
-        1
+        ImportResult(
+            importedCount = 1,
+            unsupportedAaxFound = unsupportedAaxFound,
+        )
     }
 
     private fun isSupported(uri: Uri): Boolean {
@@ -136,6 +158,14 @@ class AudiobookImporter(
         return type in supportedMimeTypes || supportedExtensions.any(name::endsWith)
     }
 
+    private fun isAax(uri: Uri): Boolean {
+        val documentFile = DocumentFile.fromSingleUri(context, uri)
+        return documentFile?.name.orEmpty().lowercase().endsWith(".aax")
+    }
+
+    private fun isAax(documentFile: DocumentFile): Boolean =
+        documentFile.name.orEmpty().lowercase().endsWith(".aax")
+
     private fun collectAudioFiles(folder: DocumentFile): List<DocumentFile> {
         val audioFiles = mutableListOf<DocumentFile>()
         folder.listFiles().forEach { file ->
@@ -145,6 +175,16 @@ class AudiobookImporter(
             }
         }
         return audioFiles
+    }
+
+    private fun containsAax(folder: DocumentFile): Boolean {
+        folder.listFiles().forEach { file ->
+            when {
+                file.isDirectory && containsAax(file) -> return true
+                isAax(file) -> return true
+            }
+        }
+        return false
     }
 
     private fun compareNaturalNames(left: String, right: String): Int {

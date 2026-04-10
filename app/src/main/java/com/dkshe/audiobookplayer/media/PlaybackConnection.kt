@@ -105,8 +105,10 @@ class PlaybackConnection(
         currentController.prepare()
 
         if (autoPlay) {
+            currentController.playWhenReady = true
             currentController.play()
         } else {
+            currentController.playWhenReady = false
             currentController.pause()
         }
         refreshState()
@@ -115,8 +117,23 @@ class PlaybackConnection(
     fun togglePlayPause() {
         controller?.let { mediaController ->
             if (mediaController.isPlaying) {
+                mediaController.playWhenReady = false
                 mediaController.pause()
             } else {
+                if (mediaController.mediaItemCount == 0) {
+                    refreshState()
+                    return@let
+                }
+                when (mediaController.playbackState) {
+                    Player.STATE_IDLE -> mediaController.prepare()
+                    Player.STATE_ENDED -> {
+                        val currentIndex = mediaController.currentMediaItemIndex
+                            .takeIf { it >= 0 }
+                            ?: 0
+                        mediaController.seekTo(currentIndex, mediaController.currentPosition.coerceAtLeast(0L))
+                    }
+                }
+                mediaController.playWhenReady = true
                 mediaController.play()
             }
             refreshState()
@@ -150,7 +167,10 @@ class PlaybackConnection(
     }
 
     fun pause() {
-        controller?.pause()
+        controller?.let { mediaController ->
+            mediaController.playWhenReady = false
+            mediaController.pause()
+        }
         refreshState()
     }
 

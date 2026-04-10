@@ -20,6 +20,7 @@ import com.dkshe.audiobookplayer.R
 @Composable
 fun AudiobookCoverArt(
     coverArtPath: String?,
+    contentDescription: String? = null,
     modifier: Modifier = Modifier,
 ) {
     if (coverArtPath.isNullOrBlank()) {
@@ -30,7 +31,7 @@ fun AudiobookCoverArt(
         ) {
             Icon(
                 imageVector = Icons.Rounded.MenuBook,
-                contentDescription = stringResource(R.string.cover_art_placeholder),
+                contentDescription = contentDescription ?: stringResource(R.string.cover_art_placeholder),
                 modifier = Modifier
                     .size(44.dp)
                     .align(Alignment.Center),
@@ -40,7 +41,7 @@ fun AudiobookCoverArt(
     } else {
         AsyncImage(
             model = coverArtPath,
-            contentDescription = stringResource(R.string.cover_art),
+            contentDescription = contentDescription,
             contentScale = ContentScale.Crop,
             modifier = modifier.aspectRatio(1f),
         )
