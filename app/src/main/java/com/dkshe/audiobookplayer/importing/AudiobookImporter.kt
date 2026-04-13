@@ -31,10 +31,11 @@ class AudiobookImporter(
             if (!isSupported(uri)) return@forEach
 
             runCatching {
-                val flags = persistableFlags and
-                    (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-                if (flags != 0) {
-                    context.contentResolver.takePersistableUriPermission(uri, flags)
+                val readWriteFlags = persistableFlags and
+                    (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                val canPersist = persistableFlags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION != 0
+                if (canPersist && readWriteFlags != 0) {
+                    context.contentResolver.takePersistableUriPermission(uri, readWriteFlags)
                 }
             }
 
@@ -70,11 +71,12 @@ class AudiobookImporter(
     }
 
     suspend fun importFolder(folderUri: Uri, persistableFlags: Int): ImportResult = withContext(Dispatchers.IO) {
-        val flags = persistableFlags and
-            (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-        if (flags != 0) {
+        val readWriteFlags = persistableFlags and
+            (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        val canPersist = persistableFlags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION != 0
+        if (canPersist && readWriteFlags != 0) {
             runCatching {
-                context.contentResolver.takePersistableUriPermission(folderUri, flags)
+                context.contentResolver.takePersistableUriPermission(folderUri, readWriteFlags)
             }
         }
 
