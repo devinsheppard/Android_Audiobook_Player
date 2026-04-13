@@ -100,7 +100,8 @@ class PlaybackConnection(
                 .build()
         }
 
-        val (itemIndex, itemPositionMs) = resolvePlaylistSeek(contentItems, startPositionMs)
+        val clampedStartPositionMs = clampStartPosition(contentItems, startPositionMs)
+        val (itemIndex, itemPositionMs) = resolvePlaylistSeek(contentItems, clampedStartPositionMs)
         currentController.setMediaItems(mediaItems, itemIndex, itemPositionMs)
         currentController.prepare()
 
@@ -130,7 +131,12 @@ class PlaybackConnection(
                         val currentIndex = mediaController.currentMediaItemIndex
                             .takeIf { it >= 0 }
                             ?: 0
-                        mediaController.seekTo(currentIndex, mediaController.currentPosition.coerceAtLeast(0L))
+                        val restartPositionMs = mediaController.duration
+                            .takeIf { it > 1_000L }
+                            ?.minus(1_000L)
+                            ?.coerceAtLeast(0L)
+                            ?: 0L
+                        mediaController.seekTo(currentIndex, restartPositionMs)
                     }
                 }
                 mediaController.playWhenReady = true
@@ -138,6 +144,16 @@ class PlaybackConnection(
             }
             refreshState()
         }
+    }
+
+    fun hasPreparedBook(audiobookId: Long): Boolean {
+        val currentController = controller ?: return false
+        if (currentController.mediaItemCount == 0) return false
+        val currentBookId = currentController.currentMediaItem
+            ?.mediaMetadata
+            ?.extras
+            ?.getLong(EXTRA_BOOK_ID)
+        return currentBookId == audiobookId
     }
 
     fun seekTo(positionMs: Long) {
@@ -256,12 +272,28 @@ class PlaybackConnection(
         var remaining = overallPositionMs.coerceAtLeast(0L)
         contentItems.forEachIndexed { index, item ->
             val itemDuration = item.durationMs.coerceAtLeast(0L)
+            val safeItemPositionMs = if (itemDuration > 0L) {
+                remaining.coerceAtMost((itemDuration - 1L).coerceAtLeast(0L))
+            } else {
+                remaining
+            }
             if (itemDuration == 0L || remaining < itemDuration || index == contentItems.lastIndex) {
-                return index to remaining
+                return index to safeItemPositionMs
             }
             remaining -= itemDuration
         }
         return 0 to 0L
+    }
+
+    private fun clampStartPosition(
+        contentItems: List<AudiobookContentItemEntity>,
+        overallPositionMs: Long,
+    ): Long {
+        val totalDurationMs = contentItems.sumOf { it.durationMs.coerceAtLeast(0L) }
+        if (totalDurationMs <= 0L) {
+            return overallPositionMs.coerceAtLeast(0L)
+        }
+        return overallPositionMs.coerceIn(0L, (totalDurationMs - 1L).coerceAtLeast(0L))
     }
 
     private fun resolvePlaylistSeek(

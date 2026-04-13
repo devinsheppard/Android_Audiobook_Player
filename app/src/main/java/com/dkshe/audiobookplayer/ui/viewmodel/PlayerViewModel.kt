@@ -15,8 +15,11 @@ import com.dkshe.audiobookplayer.data.repository.AudiobookRepository
 import com.dkshe.audiobookplayer.media.PlaybackConnection
 import com.dkshe.audiobookplayer.media.PlayerUiState
 import com.dkshe.audiobookplayer.media.SleepTimerState
+import com.dkshe.audiobookplayer.importing.SampleAudiobookSeeder
+import com.dkshe.audiobookplayer.settings.AppPreferencesRepository
 import com.dkshe.audiobookplayer.ui.UiMessages
 import com.dkshe.audiobookplayer.util.formatBookmarkLabel
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +37,11 @@ data class PlayerScreenUiState(
     val bookmarks: List<BookmarkEntity> = emptyList(),
     val chapters: List<ChapterEntity> = emptyList(),
     val sleepTimer: SleepTimerState = SleepTimerState(),
+    val defaultPlaybackSpeed: Float = 1.0f,
+    val skipBackSeconds: Int = 15,
+    val skipForwardSeconds: Int = 30,
+    val defaultSleepTimerMinutes: Int = 0,
+    val autoplayOnBookOpen: Boolean = true,
     val message: String? = null,
 ) {
     val isCurrentBook: Boolean
@@ -49,12 +57,18 @@ data class PlayerScreenUiState(
             else -> audiobook?.totalDurationMs ?: 0L
         }
 
+    val remainingDurationMs: Long
+        get() = (effectiveDurationMs - effectivePositionMs).coerceAtLeast(0L)
+
     val currentChapterIndex: Int
         get() {
             if (chapters.isEmpty()) return -1
             val resolvedIndex = chapters.indexOfLast { it.startMs <= effectivePositionMs + 1_000L }
             return if (resolvedIndex >= 0) resolvedIndex else 0
         }
+
+    val currentChapter: ChapterEntity?
+        get() = chapters.getOrNull(currentChapterIndex)
 
     val currentContentItemIndex: Int
         get() {
@@ -84,12 +98,17 @@ data class PlayerScreenUiState(
             contentItems.size > 1 -> currentContentItemIndex in 0 until contentItems.lastIndex
             else -> false
         }
+
+    val currentTrackNumber: Int?
+        get() = currentContentItemIndex.takeIf { it >= 0 }?.plus(1)
 }
 
 class PlayerViewModel(
     private val audiobookId: Long,
     private val repository: AudiobookRepository,
     private val playbackConnection: PlaybackConnection,
+    private val preferencesRepository: AppPreferencesRepository,
+    private val sampleAudiobookSeeder: SampleAudiobookSeeder,
 ) : ViewModel() {
     private val message = MutableStateFlow<String?>(null)
     private var hasPreparedPlayback = false
@@ -123,7 +142,8 @@ class PlayerViewModel(
         playbackConnection.state,
         playbackConnection.sleepTimerState,
         message,
-    ) { playerData, playback, sleepTimer, currentMessage ->
+        preferencesRepository.preferences,
+    ) { playerData, playback, sleepTimer, currentMessage, preferences ->
         PlayerScreenUiState(
             audiobook = playerData.audiobook,
             contentItems = playerData.contentItems.ifEmpty {
@@ -134,6 +154,11 @@ class PlayerViewModel(
             chapters = playerData.chapters,
             playback = playback,
             sleepTimer = sleepTimer,
+            defaultPlaybackSpeed = preferences.defaultPlaybackSpeed,
+            skipBackSeconds = preferences.skipBackSeconds,
+            skipForwardSeconds = preferences.skipForwardSeconds,
+            defaultSleepTimerMinutes = preferences.defaultSleepTimerMinutes,
+            autoplayOnBookOpen = preferences.autoplayOnBookOpen,
             message = currentMessage,
         )
     }.stateIn(
@@ -142,8 +167,8 @@ class PlayerViewModel(
         initialValue = PlayerScreenUiState(),
     )
 
-    fun preparePlayback() {
-        if (hasPreparedPlayback) return
+    fun preparePlayback(autoPlayOverride: Boolean? = null) {
+        if (hasPreparedPlayback && playbackConnection.hasPreparedBook(audiobookId)) return
         viewModelScope.launch {
             awaitPlaybackConnection()
             val audiobook = repository.getAudiobook(audiobookId) ?: return@launch
@@ -155,15 +180,16 @@ class PlayerViewModel(
                 audiobook = audiobook,
                 contentItems = contentItems,
                 startPositionMs = resumePosition,
-                autoPlay = true,
+                autoPlay = autoPlayOverride ?: preferencesRepository.preferences.value.autoplayOnBookOpen,
             )
+            applyDefaultPlayerPreferences()
             hasPreparedPlayback = true
         }
     }
 
     fun togglePlayPause() {
         val currentState = uiState.value
-        if (!currentState.isCurrentBook) {
+        if (!isPreparedForCurrentBook(currentState)) {
             prepareFromPosition(currentState.effectivePositionMs, autoPlay = true)
             return
         }
@@ -171,7 +197,7 @@ class PlayerViewModel(
     }
 
     fun seekTo(positionMs: Long) {
-        if (!uiState.value.isCurrentBook) {
+        if (!isPreparedForCurrentBook(uiState.value)) {
             prepareFromPosition(positionMs, autoPlay = false)
             return
         }
@@ -179,7 +205,7 @@ class PlayerViewModel(
     }
 
     fun seekBy(offsetMs: Long) {
-        if (!uiState.value.isCurrentBook) {
+        if (!isPreparedForCurrentBook(uiState.value)) {
             prepareFromPosition((uiState.value.effectivePositionMs + offsetMs).coerceAtLeast(0L), autoPlay = true)
             return
         }
@@ -187,7 +213,7 @@ class PlayerViewModel(
     }
 
     fun setPlaybackSpeed(speed: Float) {
-        if (!uiState.value.isCurrentBook) {
+        if (!isPreparedForCurrentBook(uiState.value)) {
             prepareFromPosition(uiState.value.effectivePositionMs, autoPlay = false)
         }
         playbackConnection.setPlaybackSpeed(speed)
@@ -213,6 +239,7 @@ class PlayerViewModel(
                 )
             }
             playbackConnection.clearPlaylist()
+            hasPreparedPlayback = false
             message.value = UiMessages.currentPlaylistCleared
         }
     }
@@ -231,6 +258,18 @@ class PlayerViewModel(
 
     fun playFromBookmark(bookmark: BookmarkEntity) {
         prepareFromPosition(bookmark.positionMs, autoPlay = true)
+    }
+
+    fun deleteBookmark(bookmark: BookmarkEntity) {
+        viewModelScope.launch {
+            runCatching {
+                repository.deleteBookmark(bookmark.id)
+            }.onSuccess {
+                message.value = UiMessages.bookmarkDeleted
+            }.onFailure {
+                message.value = UiMessages.bookmarkDeleteFailed
+            }
+        }
     }
 
     fun playFromChapter(chapter: ChapterEntity) {
@@ -298,6 +337,29 @@ class PlayerViewModel(
         message.value = null
     }
 
+    fun deleteAudiobook(onDeleted: (String) -> Unit) {
+        viewModelScope.launch {
+            val audiobook = repository.getAudiobook(audiobookId) ?: return@launch
+            runCatching {
+                if (uiState.value.playback.currentBookId == audiobook.id) {
+                    playbackConnection.clearPlaylist()
+                }
+                audiobook.coverArtPath?.let { path ->
+                    runCatching { File(path).delete() }
+                }
+                if (SampleAudiobookSeeder.isSampleBook(audiobook.contentUri, audiobook.fileName)) {
+                    preferencesRepository.setSampleBookEnabled(false)
+                    sampleAudiobookSeeder.deleteBundledSampleFile()
+                }
+                repository.deleteAudiobook(audiobook.id)
+            }.onSuccess {
+                onDeleted(UiMessages.deletedAudiobook(audiobook.title))
+            }.onFailure {
+                message.value = UiMessages.audiobookDeleteFailed
+            }
+        }
+    }
+
     private fun startOffsetForContentItem(
         contentItems: List<AudiobookContentItemEntity>,
         targetIndex: Int,
@@ -321,6 +383,21 @@ class PlayerViewModel(
                 startPositionMs = positionMs,
                 autoPlay = autoPlay,
             )
+            applyDefaultPlayerPreferences()
+            hasPreparedPlayback = true
+        }
+    }
+
+    private fun isPreparedForCurrentBook(currentState: PlayerScreenUiState): Boolean =
+        currentState.isCurrentBook && playbackConnection.hasPreparedBook(audiobookId)
+
+    private fun applyDefaultPlayerPreferences() {
+        val preferences = preferencesRepository.preferences.value
+        playbackConnection.setPlaybackSpeed(preferences.defaultPlaybackSpeed)
+        if (preferences.defaultSleepTimerMinutes > 0) {
+            playbackConnection.setSleepTimer(preferences.defaultSleepTimerMinutes * 60_000L)
+        } else {
+            playbackConnection.clearSleepTimer()
         }
     }
 
@@ -352,6 +429,8 @@ class PlayerViewModel(
                     audiobookId = audiobookId,
                     repository = container.repository,
                     playbackConnection = container.playbackConnection,
+                    preferencesRepository = container.preferencesRepository,
+                    sampleAudiobookSeeder = container.sampleAudiobookSeeder,
                 )
             }
         }

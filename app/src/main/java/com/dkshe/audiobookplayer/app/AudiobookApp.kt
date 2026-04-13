@@ -4,13 +4,19 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
 import com.dkshe.audiobookplayer.AudiobookApplication
 import com.dkshe.audiobookplayer.ui.navigation.AudiobookNavGraph
@@ -20,6 +26,8 @@ fun AudiobookApp() {
     val context = LocalContext.current
     val app = context.applicationContext as AudiobookApplication
     val navController = rememberNavController()
+    val preferences by app.container.preferencesRepository.preferences.collectAsStateWithLifecycle()
+    var hasHandledLaunchResume by rememberSaveable { mutableStateOf(false) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -83,6 +91,16 @@ fun AudiobookApp() {
         }
     }
 
+    LaunchedEffect(hasHandledLaunchResume) {
+        if (hasHandledLaunchResume) return@LaunchedEffect
+        hasHandledLaunchResume = true
+        if (!preferences.resumeOnLaunch) return@LaunchedEffect
+
+        val playbackState = app.container.repository.getMostRecentIncompletePlaybackState() ?: return@LaunchedEffect
+        val audiobook = app.container.repository.getAudiobook(playbackState.audiobookId) ?: return@LaunchedEffect
+        navController.navigate("player/${audiobook.id}")
+    }
+
     AudiobookNavGraph(
         navController = navController,
         container = app.container,
@@ -90,6 +108,8 @@ fun AudiobookApp() {
             importLauncher.launch(
                 Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                     type = "audio/*"
                     putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
                     putExtra(
@@ -104,6 +124,13 @@ fun AudiobookApp() {
                 Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                },
+            )
+        },
+        onLaunchLibrivox = {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse("https://librivox.org/")).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 },
             )
         },
